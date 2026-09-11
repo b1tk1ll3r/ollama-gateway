@@ -1,0 +1,26 @@
+services:
+  gateway:
+    build: .
+    command: ["-config", "/etc/ollama-gateway/config.json"]
+    ports:
+      - "${GATEWAY_PUBLISH_ADDRESS:-127.0.0.1}:${GATEWAY_PUBLISH_PORT:-9080}:8080"
+    volumes:
+      - ${GATEWAY_CONFIG:-./config.example.json}:/etc/ollama-gateway/config.json:ro
+      - gateway-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "/ollama-gateway", "-probe", "http://127.0.0.1:8080/healthz", "-probe-timeout", "2s"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  gateway-data:

@@ -1,0 +1,340 @@
+{
+  "server": {
+    "listen": ":8080",
+    "read_header_timeout": "10s",
+    "idle_timeout": "2m",
+    "max_request_duration": "30m",
+    "max_body_bytes": 67108864,
+    "metrics_public": false
+  },
+  "auth": {
+    "oidc": {
+      "enabled": true,
+      "issuer": "${OIDC_ISSUER}",
+      "audience": "${OIDC_AUDIENCE}",
+      "tenant_claim": "tenant_id",
+      "application_claim": "azp",
+      "groups_claim": "groups",
+      "admin_groups": [
+        "llm-gateway-admins"
+      ],
+      "clock_skew": "60s",
+      "jwks_refresh_min_interval": "10s",
+      "allowed_algorithms": [
+        "RS256",
+        "PS256",
+        "ES256",
+        "EdDSA"
+      ]
+    },
+    "api_keys": [
+      {
+        "name": "automation",
+        "key": "${GATEWAY_AUTOMATION_KEY}",
+        "tenant": "internal",
+        "subject": "automation",
+        "application": "automation",
+        "scopes": [],
+        "service_class": "interactive"
+      }
+    ],
+    "ip_bypass": [
+      {
+        "cidrs": [
+          "10.42.0.0/24"
+        ],
+        "tenant": "internal",
+        "subject": "trusted-lan",
+        "application": "lan-services",
+        "scopes": []
+      }
+    ],
+    "trusted_proxies": [
+      "10.0.0.0/8"
+    ]
+  },
+  "scheduler": {
+    "global_concurrency": 4,
+    "max_queue": 2048,
+    "max_queue_per_actor": 64,
+    "queue_timeout": "10m",
+    "default_tenant_weight": 1,
+    "default_actor_weight": 1,
+    "policies": {
+      "*": {
+        "tenant_weight": 1,
+        "actor_weight": 1,
+        "actor_credits_per_minute": 60,
+        "actor_burst_credits": 180,
+        "tenant_credits_per_minute": 300,
+        "tenant_burst_credits": 900
+      },
+      "internal": {
+        "tenant_weight": 2,
+        "actor_weight": 2,
+        "actor_credits_per_minute": 180,
+        "actor_burst_credits": 540,
+        "tenant_credits_per_minute": 900,
+        "tenant_burst_credits": 2700
+      }
+    },
+    "compute_paths": [
+      "/api/generate",
+      "/api/chat",
+      "/api/embed",
+      "/api/embeddings",
+      "/v1/chat/completions",
+      "/v1/completions",
+      "/v1/embeddings",
+      "/v1/responses",
+      "/v1/messages"
+    ]
+  },
+  "quota": {
+    "enabled": true
+  },
+  "cost": {
+    "default": {
+      "input_credits_per_1k": 1,
+      "output_credits_per_1k": 3,
+      "compute_credits_per_second": 0,
+      "cached_input_factor": 1.0
+    },
+    "models": {
+      "small-*": {
+        "input_credits_per_1k": 0.5,
+        "output_credits_per_1k": 1.5
+      },
+      "large-*": {
+        "input_credits_per_1k": 2,
+        "output_credits_per_1k": 6
+      }
+    },
+    "default_max_output_tokens": 1024
+  },
+  "model_capabilities": {
+    "mode": "enforce",
+    "cache_ttl": "10m",
+    "context_guard": "reject",
+    "context": {
+      "max_requested_tokens": 32768,
+      "default_worker_tokens": 4096,
+      "estimation_margin_percent": 15,
+      "vision_reserve_tokens_per_image": 2048
+    }
+  },
+  "routing": {
+    "loaded_bonus": 60,
+    "installed_bonus": 30,
+    "throughput_bonus": 20,
+    "vram_pressure_penalty": 35,
+    "gpu_utilization_penalty": 10,
+    "avoid_vram_percent": 97
+  },
+  "workers": [
+    {
+      "name": "mac-studio-m5-ultra",
+      "url": "http://127.0.0.1:11434",
+      "max_concurrent": 4,
+      "health_interval": "5s",
+      "memory_capacity_bytes": 274877906944,
+      "vram_capacity_bytes": 274877906944,
+      "labels": {
+        "host": "mac-studio-m5-ultra",
+        "memory": "unified",
+        "accelerator": "apple-gpu"
+      },
+      "local_system_stats": true,
+      "model_concurrency": {
+        "*": 4
+      },
+      "model_placement": {
+        "mode": "allow_all",
+        "allowed_models": [],
+        "denied_models": []
+      }
+    }
+  ],
+  "usage": {
+    "journal_dir": "./data/usage",
+    "buffer": 16384,
+    "flush_interval": "1s",
+    "retention": {
+      "detail_days": 30,
+      "daily_days": 400,
+      "monthly_months": 0,
+      "compaction_interval": "6h"
+    }
+  },
+  "native": {
+    "management_requires_admin": true,
+    "control_worker": "mac-studio-m5-ultra"
+  },
+  "ui": {
+    "enabled": true,
+    "path": "/admin",
+    "title": "Ollama Fair Gateway",
+    "recent_events": 20000,
+    "session_secret": "${GATEWAY_UI_SESSION_SECRET}",
+    "secure_cookies": true,
+    "oidc": {
+      "enabled": true,
+      "client_id": "${OIDC_UI_CLIENT_ID}",
+      "client_secret": "${OIDC_UI_CLIENT_SECRET}",
+      "scopes": [
+        "openid",
+        "profile",
+        "email"
+      ],
+      "redirect_url": "${GATEWAY_UI_REDIRECT_URL}"
+    }
+  },
+  "infrastructure": {
+    "node_name": "mac-studio-gateway",
+    "refresh_interval": "250ms",
+    "max_requests": 256
+  },
+  "storage": {
+    "data_dir": "./data",
+    "config_file": "gateway-config.json",
+    "api_keys_file": "api-keys.json",
+    "policies_file": "policies.json",
+    "metrics_file": "metrics.json",
+    "quota_file": "quota.json",
+    "worker_performance_file": "worker-performance.json",
+    "flush_interval": "10s",
+    "model_placement_file": "model-placement.json",
+    "worker_state_file": "worker-state.json",
+    "auto_tune_file": "auto-tune.json",
+    "warm_models_file": "warm-models.json",
+    "alerts_file": "alerts.json",
+    "conversations_file": "conversations.enc.json",
+    "batch_jobs_file": "batch-jobs.json",
+    "batch_jobs_dir": "batch"
+  },
+  "reliability": {
+    "enabled": true,
+    "failure_threshold": 3,
+    "open_duration": "30s",
+    "retry_attempts": 2,
+    "retry_backoff": "50ms"
+  },
+  "model_access": {
+    "default": {
+      "mode": "allow_all",
+      "allowed_models": [],
+      "denied_models": []
+    },
+    "tenants": {}
+  },
+  "model_aliases": {},
+  "service_classes": {
+    "default": "interactive",
+    "header": "X-Gateway-Service-Class",
+    "override_scope": "gateway:service-class",
+    "classes": {
+      "interactive": {
+        "weight": 4,
+        "max_queue_wait": "30s",
+        "max_concurrent": 0
+      },
+      "system": {
+        "weight": 8,
+        "max_queue_wait": "30s",
+        "max_concurrent": 1
+      },
+      "background": {
+        "weight": 1,
+        "max_queue_wait": "10m",
+        "max_concurrent": 1
+      },
+      "batch": {
+        "weight": 0.5,
+        "max_queue_wait": "30m",
+        "max_concurrent": 1
+      }
+    }
+  },
+  "auto_tuning": {
+    "enabled": true,
+    "max_concurrency": 4,
+    "samples_per_level": 2,
+    "max_tokens": 96,
+    "timeout": "10m",
+    "prompt": "Write a short deterministic explanation of why bounded concurrency matters for local LLM inference.",
+    "ttft_weight": 0.25,
+    "throughput_weight": 1
+  },
+  "conversations": {
+    "enabled": false,
+    "encryption_key": "${GATEWAY_CONVERSATION_KEY}",
+    "retention": "24h",
+    "max_entries": 1000,
+    "max_content_bytes": 2097152
+  },
+  "batch_jobs": {
+    "enabled": false,
+    "retention": "168h",
+    "max_jobs": 1000,
+    "max_concurrent": 1,
+    "max_input_bytes": 16777216
+  },
+  "opentelemetry": {
+    "enabled": false,
+    "endpoint": "http://127.0.0.1:4318",
+    "headers": {},
+    "service_name": "ollama-fair-gateway",
+    "service_version": "",
+    "sample_ratio": 1,
+    "batch_size": 128,
+    "flush_interval": "2s",
+    "capture_content": false
+  },
+  "warm_models": {
+    "enabled": true,
+    "reconcile_interval": "30s",
+    "operation_timeout": "2m",
+    "policies": {
+      "qwen3:8b": {
+        "class": "warm",
+        "workers": [
+          "mac-studio-m5-ultra"
+        ],
+        "replicas": 1,
+        "preload": true,
+        "idle_timeout": "30m"
+      },
+      "gemma4:*": {
+        "class": "cold",
+        "workers": [
+          "mac-studio-m5-ultra"
+        ],
+        "replicas": 1,
+        "preload": false,
+        "idle_timeout": "10m"
+      }
+    }
+  },
+  "alerts": {
+    "enabled": true,
+    "evaluation_interval": "15s",
+    "cooldown": "5m",
+    "history_limit": 500,
+    "thresholds": {
+      "worker_down_for": "30s",
+      "circuit_open": true,
+      "queue_depth": 100,
+      "vram_percent": 95,
+      "storage_bytes": 0,
+      "quota_remaining_percent": 10,
+      "oom": true,
+      "queue_wait": "30s"
+    },
+    "webhooks": [],
+    "webhook_timeout": "5s",
+    "webhook_max_concurrent": 4,
+    "webhook_queue": 1024,
+    "webhook_retry_attempts": 3,
+    "webhook_retry_backoff": "500ms"
+  }
+}

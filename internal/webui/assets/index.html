@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Ollama Fair Gateway</title>
+  <link rel="stylesheet" href="./app.css">
+</head>
+<body>
+  <div id="toast-root" class="toast-root" aria-live="polite"></div>
+  <div id="login" class="login-shell hidden">
+    <section class="login-card">
+      <div class="brand brand-large"><span class="brand-mark">OF</span><div><strong id="login-title">Ollama Fair Gateway</strong><small>Control Plane</small></div></div>
+      <h1>Gateway verwalten</h1>
+      <p class="muted">Melde dich per OIDC an oder verwende einen administrativen API-Key. IP-Bypass wird automatisch erkannt.</p>
+      <a id="oidc-login" class="button primary wide hidden" href="#">Mit OIDC anmelden</a>
+      <div id="login-divider" class="divider hidden"><span>oder</span></div>
+      <form id="key-login" class="stack">
+        <label>API-Key<input id="login-key" type="password" autocomplete="off" placeholder="X-API-Key / Bearer Token"></label>
+        <button class="button wide" type="submit">API-Key verwenden</button>
+      </form>
+      <div id="login-error" class="callout danger hidden"></div>
+      <p class="fineprint">Credentials aus dem Formular werden nur in <code>sessionStorage</code> dieses Browser-Tabs gehalten.</p>
+    </section>
+  </div>
+
+  <div id="app" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">OF</span><div><strong id="brand-title">Ollama Fair Gateway</strong><small>Control Plane</small></div></div>
+      <nav id="nav" class="nav">
+        <button data-page="overview" data-admin class="active"><span>◫</span> Übersicht</button>
+        <button data-page="live" data-admin><span>∿</span> Live Flow</button>
+        <button data-page="infrastructure" data-admin><span>⌘</span> Infrastruktur</button>
+        <button data-page="workers" data-admin><span>◇</span> Worker</button>
+        <button data-page="models" data-admin><span>▦</span> Modelle</button>
+        <button data-page="routing" data-admin><span>⇄</span> Model Placement</button>
+        <button data-page="fairness" data-admin><span>≋</span> Fairness & Quotas</button>
+        <button data-page="autotune" data-admin><span>⚙</span> Auto-Tuning</button>
+        <button data-page="warm" data-admin><span>♨</span> Warm Models</button>
+        <button data-page="alerts" data-admin><span>!</span> Alerts</button>
+        <button data-page="usage"><span>⌁</span> Nutzung</button>
+        <button data-page="jobs" data-admin><span>⊘</span> Jobs</button>
+        <button data-page="batches" data-admin><span>▤</span> Batch Jobs</button>
+        <button data-page="operations" data-admin><span>↻</span> Operationen</button>
+        <button data-page="security" data-admin><span>⊙</span> Sicherheit</button>
+        <button data-page="storage" data-admin><span>▣</span> Persistenz</button>
+        <button data-page="config" data-admin><span>{ }</span> Konfiguration</button>
+      </nav>
+      <div class="sidebar-foot">
+        <div id="connection-state" class="status-line"><span class="dot"></span><span>Verbinde …</span></div>
+        <button id="logout" class="text-button">Abmelden</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1 id="page-title">Übersicht</h1>
+          <p id="page-subtitle">Live-Zustand des Gateways</p>
+        </div>
+        <div class="top-actions">
+          <div class="identity-pill"><span id="identity-name">–</span><small id="identity-tenant">–</small></div>
+          <button id="refresh" class="icon-button" title="Aktualisieren">↻</button>
+        </div>
+      </header>
+
+      <section id="page-overview" class="page active">
+        <div class="kpi-grid">
+          <article class="kpi"><span>Queue</span><strong id="kpi-queue">0</strong><small id="kpi-queue-sub">wartend</small></article>
+          <article class="kpi"><span>Aktiv</span><strong id="kpi-running">0</strong><small id="kpi-running-sub">laufende Requests</small></article>
+          <article class="kpi"><span>Requests</span><strong id="kpi-requests">0</strong><small>persistiert gesamt</small></article>
+          <article class="kpi"><span>Compute Credits</span><strong id="kpi-credits">0</strong><small>persistiert erfasst</small></article>
+          <article class="kpi"><span>Tokens</span><strong id="kpi-tokens">0</strong><small>Prompt + Completion</small></article>
+          <article class="kpi"><span>Worker</span><strong id="kpi-workers">0/0</strong><small>gesund</small></article>
+        </div>
+        <div class="grid two-thirds">
+          <article class="panel"><div class="panel-head"><div><h2>Traffic</h2><p>Requests und Credits der letzten Ereignisse</p></div><span id="chart-window" class="badge">Live</span></div><div id="traffic-chart" class="chart"></div></article>
+          <article class="panel"><div class="panel-head"><div><h2>System</h2><p>Scheduler und Worker</p></div></div><div id="system-health" class="health-list"></div></article>
+        </div>
+        <div class="grid two">
+          <article class="panel"><div class="panel-head"><div><h2>Top Modelle</h2><p>nach Compute Credits</p></div></div><div id="top-models" class="bar-list"></div></article>
+          <article class="panel"><div class="panel-head"><div><h2>Letzte Requests</h2><p>ohne Prompt-/Response-Inhalte</p></div><button class="link-button" data-goto="usage">Alle anzeigen</button></div><div id="recent-mini" class="table-wrap compact"></div></article>
+        </div>
+      </section>
+
+      <section id="page-live" class="page">
+        <div class="kpi-grid four">
+          <article class="kpi"><span>Live Requests</span><strong id="live-active">0</strong><small>Queue + Ausführung</small></article>
+          <article class="kpi"><span>Queued</span><strong id="live-queued">0</strong><small>wartet auf Fair Scheduler</small></article>
+          <article class="kpi"><span>Streaming</span><strong id="live-streaming">0</strong><small>liefert aktuell Daten</small></article>
+          <article class="kpi"><span>Live Tokens</span><strong id="live-tokens">0</strong><small>sichtbare Prompt + Completion Tokens</small></article>
+        </div>
+        <article class="panel live-flow-panel">
+          <div class="panel-head live-flow-head">
+            <div><h2>Request Pulse Map</h2><p>Echte Request-Lifecycles als animierter Datenfluss: Tenant → Admission → Fair Queue → Worker; Streaming-Pulse laufen zurück zum Client.</p></div>
+            <div class="live-controls">
+              <div id="live-stream-state" class="status-chip warn">verbinde …</div>
+              <select id="live-state-filter" aria-label="Status filtern"><option value="">Alle Zustände</option><option value="queued">Queued</option><option value="routing">Routing</option><option value="running">Running</option><option value="streaming">Streaming</option></select>
+              <input id="live-search" aria-label="Live Requests filtern" placeholder="Tenant, Actor, Modell …">
+              <button id="live-motion" class="button small" type="button">Animation pausieren</button>
+            </div>
+          </div>
+          <div id="live-flow-stage" class="live-flow-stage">
+            <canvas id="live-flow-canvas" aria-label="Animierte Visualisierung laufender Requests"></canvas>
+            <div id="live-flow-empty" class="live-flow-empty">Warte auf laufende Requests …</div>
+            <div id="live-flow-tooltip" class="live-flow-tooltip hidden"></div>
+            <div class="live-flow-legend"><span><i class="legend-dot queued"></i>Queue</span><span><i class="legend-dot running"></i>Compute</span><span><i class="legend-dot streaming"></i>Streaming</span><span><i class="legend-dot done"></i>Finished</span></div>
+          </div>
+        </article>
+        <div class="grid two live-detail-grid">
+          <article class="panel"><div class="panel-head"><div><h2>Aktive Requests</h2><p>Keine Prompts oder Antworten – nur Routing-, Timing- und Usage-Metadaten.</p></div></div><div id="live-request-list" class="live-request-list"></div></article>
+          <article class="panel"><div class="panel-head"><div><h2>Worker-Pulse</h2><p>Aktuelle Request-Verteilung auf die Ollama-Worker.</p></div></div><div id="live-worker-list" class="live-worker-list"></div></article>
+        </div>
+      </section>
+
+      <section id="page-infrastructure" class="page">
+        <div class="kpi-grid five cluster-kpis">
+          <article class="kpi"><span>Gateways</span><strong id="cluster-gateways">0</strong><small>dieser Prozess</small></article>
+          <article class="kpi"><span>Ollama Worker</span><strong id="cluster-workers">0</strong><small>lokale Worker</small></article>
+          <article class="kpi"><span>Live Requests</span><strong id="cluster-active">0</strong><small>lokal sichtbar</small></article>
+          <article class="kpi"><span>Fair Queue</span><strong id="cluster-queue">0</strong><small>lokal wartend</small></article>
+          <article class="kpi"><span>Loaded Models</span><strong id="cluster-models">0</strong><small>laufende Modelle</small></article>
+        </div>
+        <article class="panel cluster-map-panel">
+          <div class="panel-head live-flow-head">
+            <div><h2>LLM Infrastructure Map</h2><p>Lokale Echtzeit-Topologie aus der In-Memory-Engine: Tenant → Gateway → Fair Queue → Ollama Worker → geladenes Modell. Request-Pulse bewegen sich auf dem tatsächlichen Routing-Pfad.</p></div>
+            <div class="live-controls">
+              <div id="cluster-stream-state" class="status-chip warn">verbinde …</div>
+              <input id="cluster-search" aria-label="Infrastruktur filtern" placeholder="Gateway, Tenant, Worker, Modell …">
+              <button id="cluster-motion" class="button small" type="button">Animation pausieren</button>
+            </div>
+          </div>
+          <div id="cluster-map-stage" class="live-flow-stage cluster-map-stage">
+            <canvas id="cluster-map-canvas" aria-label="Lokale LLM-Infrastrukturkarte"></canvas>
+            <div id="cluster-map-empty" class="live-flow-empty">Warte auf In-Memory-Telemetrie …</div>
+            <div id="cluster-map-tooltip" class="live-flow-tooltip hidden"></div>
+            <div class="live-flow-legend"><span><i class="legend-dot gateway"></i>Gateway</span><span><i class="legend-dot queued"></i>Queue</span><span><i class="legend-dot running"></i>Compute</span><span><i class="legend-dot streaming"></i>Streaming</span></div>
+          </div>
+        </article>
+        <div class="grid two live-detail-grid">
+          <article class="panel"><div class="panel-head"><div><h2>Gateway-Nodes</h2><p>Prozesszustand, Queue, Running und zugeordnete Worker.</p></div></div><div id="cluster-gateway-list" class="cluster-node-list"></div></article>
+          <article class="panel"><div class="panel-head"><div><h2>Worker-Ressourcen</h2><p>Slots sowie residenter Modell- und VRAM-Footprint aus Ollama <code>/api/ps</code>.</p></div></div><div id="cluster-worker-list" class="cluster-node-list"></div></article>
+        </div>
+      </section>
+
+      <section id="page-workers" class="page">
+        <div id="worker-cards" class="worker-grid"></div>
+        <article class="panel"><div class="panel-head"><div><h2>Worker Routing</h2><p>Model-Affinity, gelernter Token-Durchsatz, GPU-/VRAM-Druck und per-model Concurrency beeinflussen den Routing-Score.</p></div></div><div id="worker-table" class="table-wrap"></div></article>
+      </section>
+
+      <section id="page-models" class="page">
+        <div class="toolbar"><div class="search"><input id="model-filter" placeholder="Modelle filtern …"></div><div class="grow"></div><button id="pull-model" class="button primary">Modell pullen</button></div>
+        <article class="panel"><div class="panel-head"><div><h2>Virtuelle Modelle / Aliases</h2><p>Stabile Client-Namen werden auf das erste routbare reale Modell aufgelöst. CRUD-Änderungen werden persistent gespeichert und sofort für neue Requests aktiv.</p></div><button id="new-alias" class="button primary small" type="button">Alias anlegen</button></div><div id="alias-table" class="table-wrap"></div></article>
+        <article class="panel"><div class="panel-head"><div><h2>Modell-Inventar</h2><p>Aggregiert über alle Worker. Capabilities und maximaler Kontext werden über Ollama <code>/api/show</code> erkannt und vor Inferenz geprüft.</p></div></div><div id="model-table" class="table-wrap"></div></article>
+      </section>
+
+      <section id="page-routing" class="page">
+        <div class="kpi-grid four">
+          <article class="kpi"><span>Worker</span><strong id="placement-workers">0</strong><small>Routing-Ziele</small></article>
+          <article class="kpi"><span>Modelle</span><strong id="placement-models">0</strong><small>im Inventar</small></article>
+          <article class="kpi"><span>Overrides</span><strong id="placement-overrides">0</strong><small>persistente Worker-Regeln</small></article>
+          <article class="kpi"><span>Nicht routbar</span><strong id="placement-unroutable">0</strong><small>auf keinem Worker erlaubt/installiert</small></article>
+        </div>
+        <article class="panel">
+          <div class="panel-head placement-head">
+            <div><h2>Model Placement Matrix</h2><p>Harte Routing-Grenzen vor dem adaptiven Worker-Score. Klick auf eine Zelle setzt eine exakte Ausnahme; ein weiterer Klick setzt sie auf die geerbte Regel zurück.</p></div>
+            <div class="actions placement-toolbar"><input id="placement-filter" placeholder="Modell filtern …"><select id="placement-view"><option value="all">Alle Modelle</option><option value="routable">Nur routbar</option><option value="unroutable">Nicht routbar</option><option value="multi">Auf mehreren Workern</option></select><button id="refresh-placement" class="button small" type="button">Aktualisieren</button></div>
+          </div>
+          <div class="placement-legend"><span><i class="placement-dot allowed"></i> erlaubt + installiert</span><span><i class="placement-dot allowed-empty"></i> erlaubt, nicht installiert</span><span><i class="placement-dot loaded"></i> aktuell geladen</span><span><i class="placement-dot denied"></i> gesperrt</span><span><b>↳</b> exakte UI-Ausnahme</span></div>
+          <div id="placement-matrix" class="table-wrap placement-matrix"></div>
+          <div class="callout placement-help"><strong>Priorität:</strong> exakter Modellname → längstes passendes Prefix wie <code>gemma4:*</code> → Worker-Modus. Bei gleich spezifischen Regeln gewinnt „deny“. Ein Modell wird nur auf Worker geroutet, auf denen es erlaubt und laut Inventar verfügbar ist; bei unbekanntem Inventar bleibt ein kontrollierter Fallback möglich.</div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><h2>Worker Rulesets</h2><p><strong>Allow all</strong> eignet sich für allgemeine Worker; <strong>Whitelist</strong> für dedizierte Nodes. UI-Overrides werden sofort angewendet und persistent gespeichert.</p></div></div>
+          <div id="placement-worker-cards" class="placement-worker-grid"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><h2>Policy Simulator</h2><p>Simuliert ACL, Alias-Auflösung, Capabilities, Kontext, Kosten, QoS, Placement und den aktuellen Worker-Score – ohne einen Inferenzjob zu starten.</p></div></div>
+          <form id="policy-simulator-form" class="simulator-form">
+            <label>Tenant<input id="sim-tenant" list="sim-tenant-list" placeholder="z. B. developers" required><datalist id="sim-tenant-list"></datalist></label>
+            <label>API-Key (optional)<select id="sim-api-key"><option value="">Tenant-Regel ohne Key-ACL</option></select></label>
+            <label>Modell / Alias<input id="sim-model" list="sim-model-list" placeholder="z. B. coding" required><datalist id="sim-model-list"></datalist></label>
+            <label>Service Class<select id="sim-service-class"><option value="">Default</option></select></label>
+            <label>Input Tokens<input id="sim-input-tokens" type="number" min="0" step="1" value="4096"></label>
+            <label>Output Tokens<input id="sim-output-tokens" type="number" min="0" step="1" value="1024"></label>
+            <label class="sim-capabilities">Capabilities<input id="sim-capabilities" placeholder="tools, vision, thinking"></label>
+            <div class="sim-submit"><button class="button primary" type="submit">Routing simulieren</button></div>
+          </form>
+          <div id="policy-simulator-result" class="simulator-result"><div class="empty">Noch keine Simulation ausgeführt.</div></div>
+        </article>
+      </section>
+
+      <section id="page-fairness" class="page">
+        <div class="grid three">
+          <article class="panel metric-panel"><span>Global Concurrency</span><strong id="fair-concurrency">–</strong></article>
+          <article class="panel metric-panel"><span>Max Queue</span><strong id="fair-maxqueue">–</strong></article>
+          <article class="panel metric-panel"><span>Actor Queue</span><strong id="fair-actorqueue">–</strong></article>
+        </div>
+        <article class="panel"><div class="panel-head"><div><h2>Tenant Policies</h2><p>Overrides gelten sofort für neue Requests und werden persistent im lokalen State-Verzeichnis gespeichert.</p></div><button id="new-policy" class="button">Override anlegen</button></div><div id="policy-table" class="table-wrap"></div></article>
+        <article class="panel"><div class="panel-head"><div><h2>Tenant Model Access</h2><p>Tenant-basierte Modell-ACLs gelten vor Alias-Auflösung und Routing. Runtime-Änderungen werden persistent gespeichert und sofort angewendet.</p></div><button id="new-model-access" class="button">Tenant ACL anlegen</button></div><div id="model-access-table" class="table-wrap"></div></article>
+        <article class="panel"><div class="panel-head"><div><h2>Service Classes / QoS</h2><p>Priorisiert interaktive, System-, Background- und Batch-Last innerhalb der Tenant-Fairness.</p></div></div><div id="service-class-table" class="table-wrap"></div></article>
+        <div class="grid two">
+          <article class="panel"><div class="panel-head"><div><h2>Tenant-Nutzung</h2><p>Persistente Zusammenfassung aus dem Usage-Journal</p></div></div><div id="tenant-usage" class="bar-list"></div></article>
+          <article class="panel"><div class="panel-head"><div><h2>Fairness-Modell</h2><p>Admission und Scheduling sind getrennt.</p></div></div><div class="flow-diagram"><div>Compute Credit Bucket</div><span>↓</span><div>Tenant WFQ</div><span>↓</span><div>Actor WFQ</div><span>↓</span><div>Model-aware Worker Router</div></div></article>
+        </div>
+      </section>
+
+      <section id="page-autotune" class="page">
+        <div class="kpi-grid four">
+          <article class="kpi"><span>Status</span><strong id="autotune-enabled">–</strong><small>Benchmark Engine</small></article>
+          <article class="kpi"><span>Profile</span><strong id="autotune-profiles">0</strong><small>persistente Benchmarks</small></article>
+          <article class="kpi"><span>Overrides</span><strong id="autotune-applied">0</strong><small>aktive Model-Concurrency</small></article>
+          <article class="kpi"><span>OTel Spans</span><strong id="otel-exported">0</strong><small id="otel-status">deaktiviert</small></article>
+        </div>
+        <div class="grid two">
+          <article class="panel">
+            <div class="panel-head"><div><h2>Concurrency Benchmark</h2><p>Misst TTFT, Durchsatz und optional GPU/VRAM für ein Modell auf genau einem Worker. Der Benchmark erzeugt echte Inferenzlast.</p></div></div>
+            <form id="autotune-form" class="stack">
+              <label>Worker<select id="autotune-worker"></select></label>
+              <label>Modell<select id="autotune-model"></select></label>
+              <div class="form-grid"><label>Max. Concurrency<input id="autotune-max-concurrency" type="number" min="1" max="32" placeholder="Config-Default"></label><label>Samples je Stufe<input id="autotune-samples" type="number" min="1" max="20" placeholder="Config-Default"></label><label>Max Output Tokens<input id="autotune-max-tokens" type="number" min="8" max="4096" placeholder="Config-Default"></label></div>
+              <div class="callout warn-callout"><strong>Produktionslast:</strong> Der Benchmark startet gleichzeitig mehrere echte Generierungen. Für große Modelle oder 24-GB-GPUs zunächst mit kleinen Concurrency-Stufen testen.</div>
+              <div class="dialog-actions"><button class="button primary" type="submit">Benchmark starten</button></div>
+            </form>
+          </article>
+          <article class="panel"><div class="panel-head"><div><h2>OpenTelemetry</h2><p>OTLP/HTTP-Tracing ohne Prompt-/Response-Inhalte. Queue, Routing und Ollama-Upstream erscheinen als Spans.</p></div></div><div id="otel-card" class="kv"></div></article>
+        </div>
+        <article class="panel"><div class="panel-head"><div><h2>Benchmark-Historie</h2><p>Empfehlungen können direkt als persistente per-model Concurrency-Overrides angewendet oder zurückgesetzt werden.</p></div><button id="refresh-autotune" class="button small" type="button">Aktualisieren</button></div><div id="autotune-table" class="table-wrap"></div></article>
+        <article class="panel"><div class="panel-head"><div><h2>Messstufen</h2><p id="autotune-detail-title">Wähle ein Profil aus, um TTFT, Throughput und Score zu vergleichen.</p></div></div><div id="autotune-levels" class="table-wrap"></div></article>
+      </section>
+
+      <section id="page-warm" class="page">
+        <div class="kpi-grid four">
+          <article class="kpi"><span>Manager</span><strong id="warm-enabled">–</strong><small>Residency Controller</small></article>
+          <article class="kpi"><span>Policies</span><strong id="warm-policy-count">0</strong><small>aktive Regeln</small></article>
+          <article class="kpi"><span>Aktionen</span><strong id="warm-running">0</strong><small>Preload / Unload aktiv</small></article>
+          <article class="kpi"><span>Eviction</span><strong id="warm-suggestions">0</strong><small>VRAM-Empfehlungen</small></article>
+        </div>
+        <div class="grid two">
+          <article class="panel">
+            <div class="panel-head"><div><h2>Residency Policy</h2><p>Hot hält Modelle resident, Warm entlädt nach Idle-Timeout, Cold entlädt aggressiv. Placement und Worker-Drain bleiben harte Grenzen.</p></div></div>
+            <form id="warm-policy-form" class="stack">
+              <label>Modell / Pattern<input id="warm-pattern" list="warm-model-list" placeholder="gemma4:*" required><datalist id="warm-model-list"></datalist></label>
+              <div class="form-grid">
+                <label>Klasse<select id="warm-class"><option value="hot">Hot</option><option value="warm" selected>Warm</option><option value="cold">Cold</option></select></label>
+                <label>Replicas<input id="warm-replicas" type="number" min="1" max="32" value="1"></label>
+                <label>Idle Timeout<input id="warm-idle" placeholder="30m" value="30m"></label>
+              </div>
+              <label class="checkbox-line"><input id="warm-preload" type="checkbox"> Warm-Modell proaktiv vorladen</label>
+              <div><strong>Ziel-Worker</strong><p class="muted">Keine Auswahl = Gateway wählt aus allen erlaubten/installierten Workern.</p><div id="warm-workers" class="model-tags"></div></div>
+              <div class="dialog-actions"><button id="warm-form-clear" class="button" type="button">Neu / leeren</button><button class="button primary" type="submit">Regel speichern</button></div>
+            </form>
+          </article>
+          <article class="panel"><div class="panel-head"><div><h2>VRAM Eviction Vorschläge</h2><p>Nur inaktive, nicht-Hot Modelle werden vorgeschlagen. Es erfolgt keine automatische aggressive Eviction.</p></div></div><div id="warm-suggestion-list" class="health-list"></div></article>
+        </div>
+        <article class="panel"><div class="panel-head"><div><h2>Warm Model Rules</h2><p>Runtime-Overrides werden persistent gespeichert und wirken ohne Gateway-Neustart.</p></div><div class="actions"><button id="warm-reconcile" class="button" type="button">Jetzt anwenden</button><button id="warm-reset" class="button danger-button" type="button">Auf Config zurücksetzen</button></div></div><div id="warm-policy-table" class="table-wrap"></div></article>
+        <article class="panel"><div class="panel-head"><div><h2>Letzte Residency-Aktionen</h2><p>Preload/Unload-Aktionen werden separat vom Inference-Hot-Path ausgeführt.</p></div></div><div id="warm-actions-table" class="table-wrap"></div></article>
+      </section>
+
+      <section id="page-alerts" class="page">
+        <div class="kpi-grid four">
+          <article class="kpi"><span>Alerts</span><strong id="alerts-enabled">–</strong><small>Evaluator</small></article>
+          <article class="kpi"><span>Aktiv</span><strong id="alerts-active">0</strong><small>firing</small></article>
+          <article class="kpi"><span>Webhooks</span><strong id="alerts-webhooks">0</strong><small>aktiv konfiguriert</small></article>
+          <article class="kpi"><span>Letzte Prüfung</span><strong id="alerts-last">–</strong><small>Evaluation</small></article>
+        </div>
+        <div class="grid two">
+          <article class="panel"><div class="panel-head"><div><h2>Aktive Alerts</h2><p>Worker, Circuit, Queue, VRAM, Storage, OOM und Quota-Signale.</p></div></div><div id="alerts-active-list" class="health-list"></div></article>
+          <article class="panel"><div class="panel-head"><div><h2>Webhooks</h2><p>Generic JSON Webhooks; mit Secret werden Payloads via HMAC-SHA256 signiert.</p></div><button class="link-button" data-goto="config">Konfiguration öffnen</button></div><div id="alerts-webhook-list" class="health-list"></div></article>
+        </div>
+        <article class="panel"><div class="panel-head"><div><h2>Alert-Historie</h2><p>Firing und Resolved Events werden persistent gespeichert.</p></div></div><div id="alerts-history-table" class="table-wrap"></div></article>
+        <article class="panel"><div class="panel-head"><div><h2>Webhook Deliveries</h2><p>Letzte Zustellversuche inklusive HTTP-Status bzw. Fehler.</p></div></div><div id="alerts-delivery-table" class="table-wrap"></div></article>
+      </section>
+
+      <section id="page-usage" class="page">
+        <div class="kpi-grid four">
+          <article class="kpi"><span>Meine Requests</span><strong id="my-requests">0</strong></article>
+          <article class="kpi"><span>Meine Credits</span><strong id="my-credits">0</strong></article>
+          <article class="kpi"><span>Prompt Tokens</span><strong id="my-prompt">0</strong></article>
+          <article class="kpi"><span>Completion Tokens</span><strong id="my-completion">0</strong></article>
+        </div>
+        <div data-admin>
+          <article class="panel"><div class="panel-head"><div><h2>Historische Aggregate</h2><p>Nach Ablauf der Detail-Retention bleiben Tages- und Monatswerte für langfristige Trends erhalten.</p></div><div class="actions"><select id="rollup-granularity"><option value="daily" selected>Täglich</option><option value="monthly">Monatlich</option></select><select id="rollup-dimension"><option value="global" selected>Gesamt</option><option value="tenant">Tenant</option><option value="actor">Actor</option><option value="model">Modell</option><option value="worker">Worker</option><option value="application">Anwendung</option></select><input id="rollup-name" class="compact-input hidden" placeholder="Name"></div></div><div id="rollup-table" class="table-wrap"></div></article>
+          <div class="toolbar"><div class="search"><input id="usage-filter" placeholder="Tenant, Actor, Modell, Pfad …"></div><select id="usage-status"><option value="">Alle Status</option><option value="2">2xx</option><option value="4">4xx</option><option value="5">5xx</option></select><select id="usage-limit"><option>100</option><option selected>250</option><option>500</option><option>1000</option></select></div>
+          <article class="panel"><div class="panel-head"><div><h2>Request Journal</h2><p>Detaillierte Request-Metadaten innerhalb des konfigurierten Retention-Fensters.</p></div></div><div id="usage-table" class="table-wrap"></div></article>
+        </div>
+      </section>
+
+      <section id="page-jobs" class="page">
+        <article class="panel"><div class="panel-head"><div><h2>Aktive Inferenz-Jobs</h2><p>Queued, Running und Streaming Requests können hier administrativ abgebrochen werden. Bereits verbrauchte Tokens/Credits werden soweit messbar weiter erfasst.</p></div><button id="refresh-jobs" class="button small" type="button">Aktualisieren</button></div><div id="jobs-table" class="table-wrap"></div></article>
+      </section>
+
+      <section id="page-batches" class="page">
+        <div id="batches-meta" class="callout">Lade Batch-Status …</div>
+        <article class="panel"><div class="panel-head"><div><h2>Durable Batch Jobs</h2><p>Persistente Hintergrundjobs laufen über Quotas, Fair Scheduler, Placement, Usage und die Service Class <code>batch</code>. Inhalte werden separat in der Batch-Spool gehalten.</p></div><button id="refresh-batches" class="button small" type="button">Aktualisieren</button></div><div id="batches-table" class="table-wrap"></div></article>
+      </section>
+
+      <section id="page-operations" class="page">
+        <article class="panel"><div class="panel-head"><div><h2>Modell-Operationen</h2><p>Pull-Fortschritt und administrative Aktionen.</p></div></div><div id="operations-list" class="operation-list"></div></article>
+      </section>
+
+      <section id="page-security" class="page">
+        <div id="security-grid" class="grid two"></div>
+      </section>
+
+      <section id="page-storage" class="page">
+        <div class="kpi-grid four">
+          <article class="kpi"><span>Persistenter State</span><strong id="storage-total">0 B</strong></article>
+          <article class="kpi"><span>Usage Journale</span><strong id="storage-usage-files">0</strong></article>
+          <article class="kpi"><span>Config Override</span><strong id="storage-config-override">–</strong></article>
+          <article class="kpi"><span>Flush-Intervall</span><strong id="storage-flush-interval">–</strong></article>
+        </div>
+        <article class="panel">
+          <div class="panel-head"><div><h2>Persistenter Gateway-State</h2><p>Control-Plane-State wird atomar gespeichert; Usage wird automatisch von Detaildaten in Tages-/Monatsaggregate verdichtet.</p></div><div class="actions"><button id="storage-flush" class="button" type="button">Jetzt flushen</button><button id="storage-compact" class="button" type="button">Jetzt kompaktieren</button><button id="storage-backup" class="button primary" type="button">Backup herunterladen</button></div></div>
+          <div id="storage-summary" class="callout"></div>
+          <div id="storage-table" class="table-wrap"></div>
+        </article>
+        <article class="panel"><div class="panel-head"><div><h2>Usage Retention</h2><p>Request-Details werden automatisch durch dimensionsbezogene Rollups ersetzt.</p></div></div><div id="retention-summary" class="retention-grid"></div></article>
+        <article class="panel"><div class="panel-head"><div><h2>Bewusst flüchtig</h2><p>Diese Zustände lassen sich nach einem Prozessneustart nicht sinnvoll fortsetzen.</p></div></div><div id="storage-volatile" class="model-tags"></div></article>
+      </section>
+
+      <section id="page-config" class="page">
+        <article class="panel"><div class="panel-head"><div><h2>Persistente Konfiguration</h2><p>Änderungen werden atomar gespeichert und beim nächsten Gateway-Start geladen. Secrets bleiben redigiert; API-Keys werden separat verwaltet.</p></div><div class="actions"><button id="edit-config" class="button">Bearbeiten</button><button id="copy-config" class="button">JSON kopieren</button></div></div><div id="config-status" class="callout">Effektive Konfiguration. Änderungen an der Storage-Sektion sind nur in der Bootstrap-Datei möglich.</div><textarea id="config-json" class="code-block config-editor" readonly spellcheck="false" aria-label="Gateway-Konfiguration"></textarea><div class="dialog-actions config-actions hidden" id="config-actions"><button id="cancel-config" class="button" type="button">Verwerfen</button><button id="reset-config" class="button danger-button" type="button">Persistenten Override löschen</button><button id="save-config" class="button primary" type="button">Persistent speichern</button></div></article>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="alias-dialog">
+    <form class="dialog-card" id="alias-form">
+      <div class="panel-head"><div><h2>Model Alias</h2><p>Fallbacks werden in Reihenfolge geprüft; Capability-Anforderungen gelten zusätzlich vor dem Routing.</p></div><button class="icon-button" type="button" data-close-dialog="alias-dialog">×</button></div>
+      <label>Alias-Name<input id="alias-name" required maxlength="256" placeholder="z. B. coding"></label>
+      <label>Fallback-Modelle<textarea id="alias-models" rows="6" required spellcheck="false" placeholder="qwen3.6:27b-q4_K_M&#10;qwen3:8b"></textarea></label>
+      <label>Required Capabilities<textarea id="alias-capabilities" rows="3" spellcheck="false" placeholder="completion&#10;tools"></textarea></label>
+      <label class="check-label"><input id="alias-visible" type="checkbox" checked> In Model Discovery sichtbar</label>
+      <div class="callout">Speichern wirkt ohne Gateway-Neustart. Der vollständige Alias-Snapshot wird atomar in der persistenten Gateway-Konfiguration aktualisiert.</div>
+      <div class="dialog-actions"><button type="button" class="button" data-close-dialog="alias-dialog">Abbrechen</button><button type="submit" class="button primary">Speichern & sofort anwenden</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="pull-dialog">
+    <form method="dialog" class="dialog-card" id="pull-form">
+      <div class="panel-head"><div><h2>Modell pullen</h2><p>Der Download läuft als Gateway-Operation weiter.</p></div><button class="icon-button" type="button" data-close-dialog="pull-dialog" aria-label="Dialog schließen">×</button></div>
+      <label>Worker<select id="pull-worker"></select></label>
+      <label>Modell<input id="pull-name" required placeholder="z. B. qwen3:30b"></label>
+      <div class="dialog-actions"><button type="button" class="button" data-close-dialog="pull-dialog">Abbrechen</button><button id="pull-submit" value="default" class="button primary">Pull starten</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="placement-dialog">
+    <form class="dialog-card placement-dialog-card" id="placement-form">
+      <div class="panel-head"><div><h2>Worker Placement bearbeiten</h2><p id="placement-dialog-worker">–</p></div><button class="icon-button" type="button" data-close-dialog="placement-dialog">×</button></div>
+      <label>Grundmodus<select id="placement-mode"><option value="allow_all">Alle Modelle erlauben</option><option value="whitelist">Whitelist – nur explizit erlaubte Modelle</option></select></label>
+      <div class="callout"><strong>Patterns:</strong> exakter Name oder ein abschließendes <code>*</code>, z. B. <code>gemma4:*</code>. Exakte Regeln können breitere Prefix-Regeln übersteuern.</div>
+      <label>Erlaubte Modelle / Patterns<textarea id="placement-allowed" rows="7" spellcheck="false" placeholder="qwen3:8b&#10;gemma4:*"></textarea></label>
+      <label>Gesperrte Modelle / Patterns<textarea id="placement-denied" rows="7" spellcheck="false" placeholder="orcarouter/*"></textarea></label>
+      <div class="placement-presets"><span>Preset:</span><button class="button small" type="button" data-placement-preset="all">Alle erlauben</button><button class="button small" type="button" data-placement-preset="installed">Nur installierte</button><button class="button small danger" type="button" data-placement-preset="none">Alles sperren</button></div>
+      <div class="dialog-actions"><button id="placement-reset" class="button danger-button" type="button">Auf Config-Default zurücksetzen</button><div class="grow"></div><button class="button" type="button" data-close-dialog="placement-dialog">Abbrechen</button><button class="button primary" type="submit">Speichern & sofort anwenden</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="api-key-dialog">
+    <form class="dialog-card" id="api-key-form">
+      <div class="panel-head"><div><h2>API-Key erstellen</h2><p>Der Schlüssel wird nur einmal angezeigt; anschließend wird ausschließlich sein SHA-256-Hash persistent gespeichert.</p></div><button class="icon-button" type="button" data-close-dialog="api-key-dialog">×</button></div>
+      <div class="form-grid">
+        <label>Name<input id="api-key-name" required maxlength="128" placeholder="z. B. openwebui"></label>
+        <label>Tenant<input id="api-key-tenant" required maxlength="256" placeholder="z. B. interactive"></label>
+        <label>Subject<input id="api-key-subject" maxlength="256" placeholder="optional, Standard: apikey:&lt;name&gt;"></label>
+        <label>Application<input id="api-key-application" maxlength="256" placeholder="z. B. openwebui"></label>
+        <label>Service Class<select id="api-key-service-class"><option value="">Gateway-Default</option></select></label>
+        <label class="wide">Scopes<input id="api-key-scopes" placeholder="gateway:admin, … (kommasepariert)"></label>
+        <label class="wide">Erlaubte Modelle / Aliases<textarea id="api-key-allowed-models" rows="4" placeholder="leer = alle; z. B. coding&#10;qwen3:*" spellcheck="false"></textarea></label>
+        <label class="wide">Gesperrte Modelle / Aliases<textarea id="api-key-denied-models" rows="4" placeholder="z. B. expensive-*" spellcheck="false"></textarea></label>
+      </div>
+      <div class="callout">UI-Keys bleiben über Neustarts erhalten. Das Secret selbst wird nie persistent gespeichert.</div>
+      <div class="dialog-actions"><button type="button" class="button" data-close-dialog="api-key-dialog">Abbrechen</button><button type="submit" class="button primary">Erstellen</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="created-key-dialog">
+    <div class="dialog-card">
+      <div class="panel-head"><div><h2>API-Key erstellt</h2><p><strong id="created-key-name"></strong> – dieses Secret wird nicht erneut angezeigt.</p></div><button class="icon-button" type="button" data-close-dialog="created-key-dialog">×</button></div>
+      <label>Secret<div class="secret-row"><input id="created-key-secret" class="mono" readonly autocomplete="off"><button id="copy-created-key" class="button primary" type="button">Kopieren</button></div></label>
+      <div class="callout warn-callout">Kopiere den Schlüssel jetzt an einen sicheren Ort. Im Gateway bleibt nur sein Hash gespeichert.</div>
+      <div class="dialog-actions"><button type="button" class="button primary" data-close-dialog="created-key-dialog">Fertig</button></div>
+    </div>
+  </dialog>
+
+  <dialog id="model-access-dialog">
+    <form class="dialog-card" id="model-access-form">
+      <div class="panel-head"><div><h2>Tenant Model Access</h2><p>Exakte Modellnamen und ein abschließendes <code>*</code> werden unterstützt; bei gleicher Spezifität gewinnt deny.</p></div><button class="icon-button" type="button" data-close-dialog="model-access-dialog">×</button></div>
+      <label>Tenant<input id="model-access-tenant" required maxlength="256" placeholder="z. B. interns"></label>
+      <label>Modus<select id="model-access-mode"><option value="allow_all">Allow all mit optionalen Regeln</option><option value="whitelist">Whitelist</option></select></label>
+      <label>Erlaubte Modelle / Aliases<textarea id="model-access-allowed" rows="5" spellcheck="false" placeholder="fast&#10;qwen3:*"></textarea></label>
+      <label>Gesperrte Modelle / Aliases<textarea id="model-access-denied" rows="5" spellcheck="false" placeholder="expensive-*"></textarea></label>
+      <div class="callout">Die Tenant-Regel ist die äußere Sicherheitsgrenze. Eine API-Key-ACL kann sie weiter einschränken, aber niemals erweitern.</div>
+      <div class="dialog-actions"><button type="button" class="button" data-close-dialog="model-access-dialog">Abbrechen</button><button type="submit" class="button primary">Speichern & sofort anwenden</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="policy-dialog">
+    <form class="dialog-card" id="policy-form">
+      <div class="panel-head"><div><h2>Policy Override</h2><p>Gewichte müssen größer 0 sein. Credit-Werte 0 bedeuten unbegrenzt.</p></div><button class="icon-button" type="button" data-close-dialog="policy-dialog" aria-label="Dialog schließen">×</button></div>
+      <div class="form-grid">
+        <label class="wide">Tenant<input id="policy-tenant" required placeholder="tenant-id"></label>
+        <label>Tenant Weight<input id="policy-tw" type="number" step="0.1" min="0"></label>
+        <label>Actor Weight<input id="policy-aw" type="number" step="0.1" min="0"></label>
+        <label class="wide check-label"><input id="policy-actor-unlimited" type="checkbox"> Actor-Credits unbegrenzt</label>
+        <label>Actor Credits/min<input id="policy-acpm" type="number" step="0.1" min="0"></label>
+        <label>Actor Burst<input id="policy-ab" type="number" step="0.1" min="0"></label>
+        <label class="wide check-label"><input id="policy-tenant-unlimited" type="checkbox"> Tenant-Credits unbegrenzt</label>
+        <label>Tenant Credits/min<input id="policy-tcpm" type="number" step="0.1" min="0"></label>
+        <label>Tenant Burst<input id="policy-tb" type="number" step="0.1" min="0"></label>
+      </div>
+      <div class="dialog-actions"><button type="button" class="button" data-close-dialog="policy-dialog">Abbrechen</button><button id="policy-submit" type="submit" class="button primary">Speichern</button></div>
+    </form>
+  </dialog>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>

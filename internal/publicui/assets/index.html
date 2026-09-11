@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="robots" content="index,follow">
+  <title>Gateway Status</title>
+  <link rel="stylesheet" href="./app.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div class="brand"><span class="mark">OF</span><div><strong id="title">Gateway Status</strong><small>PUBLIC STATUS</small></div></div>
+      <div class="hero-copy"><h1 id="headline">Systemstatus</h1><p id="subtitle">Live-Auslastung und Infrastruktur</p></div>
+      <div class="status-wrap"><span id="status-dot" class="status-dot"></span><div><strong id="status-text">Verbinde …</strong><small id="updated">–</small></div></div>
+    </header>
+
+    <main>
+      <section class="kpis" aria-label="Aktuelle Auslastung">
+        <article><span>Queue</span><strong id="k-queue">–</strong><small id="k-queue-sub">wartend</small></article>
+        <article><span>Aktiv</span><strong id="k-active">–</strong><small>laufende Requests</small></article>
+        <article><span>Worker</span><strong id="k-workers">–</strong><small id="k-workers-sub">gesund</small></article>
+        <article><span>Modelle</span><strong id="k-models">–</strong><small>aktuell geladen</small></article>
+        <article><span>Streaming</span><strong id="k-streaming">–</strong><small>aktive Streams</small></article>
+        <article><span>Uptime</span><strong id="k-uptime">–</strong><small>Gateway-Prozess</small></article>
+      </section>
+
+      <section class="grid map-grid">
+        <article class="panel map-panel">
+          <div class="panel-head"><div><span class="eyebrow">INFRASTRUCTURE</span><h2>Live Topology</h2><p>Read-only Ansicht von Gateway, Queue und verfügbaren Ollama-Workern.</p></div><span id="map-badge" class="badge">LIVE</span></div>
+          <div id="map-stage" class="map-stage"><canvas id="map-canvas"></canvas><div id="map-empty" class="map-empty">Warte auf Telemetrie …</div></div>
+          <div class="legend"><span><i class="g"></i>Gateway</span><span><i class="q"></i>Queue</span><span><i class="w"></i>Worker</span><span><i class="r"></i>Request</span></div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><span class="eyebrow">CAPACITY</span><h2>Worker</h2><p>Slots und optionale Ressourcenmetriken.</p></div></div>
+          <div id="workers" class="worker-list"></div>
+        </article>
+      </section>
+
+      <section class="panel live-panel">
+        <div class="panel-head"><div><span class="eyebrow">LIVE FLOW</span><h2>Aktuelle Aktivität</h2><p>Anonymisierte Request-Metadaten. Keine Prompts, Antworten, Nutzer-, Tenant- oder API-Key-Daten.</p></div><span id="live-count" class="badge muted">0 EVENTS</span></div>
+        <div id="live" class="live-grid"></div>
+      </section>
+    </main>
+
+    <footer><span>Read-only public status</span><span id="footer-refresh">–</span></footer>
+  </div>
+  <script src="./app.js" defer></script>
+</body>
+</html>
